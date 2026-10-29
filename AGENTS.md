@@ -606,8 +606,7 @@ progress to an ignored drop while the miner intentionally targets another reward
   generated release-note instructions consistent with these behaviors.
 - The helper's optional `--ca-file PATH` adds CA certificates for its TDM connection
   only, through `HelperHTTP.trust()`: system trust via truststore plus the file's
-  certificates. Verification and hostname checks stay on; never add an option that
-  disables them, because this connection carries the Twitch session. Only certificates
+  certificates. Verification and hostname checks stay on. Only certificates
   passing OpenSSL's CA check (normally `CA:TRUE`) are loaded, because truststore passes
   only those to Windows/macOS verification; missing, unreadable, non-PEM, key-only or
   server-only files fail before connecting with the fixed `HELPER_CA_FILE` code. Never
@@ -616,6 +615,18 @@ progress to an ignored drop while the miner intentionally targets another reward
   the native helper workflow's four-platform test list; keep its certificates within
   Apple's TLS rules (serverAuth, short validity) and generated through config files
   that macOS LibreSSL also accepts.
+- `--insecure-skip-tls-verify` is the user-approved, discouraged alternative; keep
+  `--ca-file` as the documented preference. It is mutually exclusive with `--ca-file`,
+  requires an `https://` destination and affects only the helper's TDM connection
+  (`HelperHTTP.unverified()`), never Twitch or browser TLS. `PrivateResolver` resolves
+  the host once before connecting; every answer must be in 10/8, 172.16/12,
+  192.168/16, 127/8, ::1, fc00::/7 or fe80::/10 (IPv4-mapped forms are unwrapped).
+  100.64/10 stays excluded because ISP customers share it. The connector then resolves
+  only the vetted host to those pinned addresses; redirects remain refused. Refusals use
+  the fixed `HELPER_INSECURE_TLS` code without echoing the URL, and the CLI prints the
+  fixed `insecure_warning` to stderr before connecting on every run. Do not widen the
+  address list, add a short alias or apply the flag elsewhere without user approval.
+  Coverage: `tests/test_helper_insecure_tls.py`, also in the four-platform list.
 
 ### Dashboard authentication
 

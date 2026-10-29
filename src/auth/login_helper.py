@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import ctypes
+import ipaddress
 import json
 import math
 import os
@@ -26,6 +27,7 @@ from typing import Any
 
 import aiohttp
 import truststore
+from aiohttp.abc import AbstractResolver, ResolveResult
 from yarl import URL
 
 from src.auth.helper_errors import HelperDiagnostics
@@ -54,6 +56,56 @@ class HelperDestination:
             raise SessionError("HELPER_DESTINATION", stage="helper_configuration", reason="invalid_response") from None
 
 
+class PrivateResolver(AbstractResolver):
+    """Resolve the TDM host once, require private addresses, then connect only to those."""
+
+    # 100.64.0.0/10 (carrier-grade NAT) is excluded: other ISP customers share it.
+    NETWORKS = tuple(ipaddress.ip_network(network) for network in (
+        "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
+        "::1/128", "fc00::/7", "fe80::/10",
+    ))
+
+    def __init__(self, destination: HelperDestination, resolver: AbstractResolver | None = None):
+        url = URL(destination.url)
+        self.host, self.port = url.raw_host or "", url.port or 0
+        self.resolver = resolver
+        self.addresses: list[ResolveResult] | None = None
+
+    @classmethod
+    def allowed(cls, value: str) -> bool:
+        try:
+            address = ipaddress.ip_address(value.split("%", 1)[0])
+        except ValueError:
+            return False
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            address = address.ipv4_mapped
+        return any(address in network for network in cls.NETWORKS)
+
+    async def vet(self) -> None:
+        # Created here because aiohttp's resolver needs the running event loop.
+        self.resolver = self.resolver or aiohttp.ThreadedResolver()
+        try:
+            results = await self.resolver.resolve(self.host, self.port, socket.AF_UNSPEC)
+        except OSError:
+            raise SessionError("HELPER_NETWORK", stage="helper_connect", reason="dns") from None
+        # Every result must qualify, so a mixed answer cannot fall back to a public address.
+        if not results or not all(self.allowed(result["host"]) for result in results):
+            raise SessionError("HELPER_INSECURE_TLS", stage="helper_configuration")
+        self.addresses = results
+
+    async def resolve(self, host: str, port: int = 0,
+                      family: socket.AddressFamily = socket.AF_INET) -> list[ResolveResult]:
+        addresses = [result for result in self.addresses or ()
+                     if family == socket.AF_UNSPEC or result["family"] == family]
+        if host != self.host or not addresses:
+            raise OSError("unvetted host")
+        return addresses
+
+    async def close(self) -> None:
+        if self.resolver is not None:
+            await self.resolver.close()
+
+
 @dataclass(frozen=True)
 class HelperTicket:
     connection: str = field(repr=False)
@@ -64,16 +116,20 @@ class HelperHTTP:
     """Bounded direct protocol, without redirects, proxies or dashboard cookies."""
 
     def __init__(self, destination: HelperDestination, *, ssl_context: ssl.SSLContext | None = None,
-                 clock: Callable[[], float] = time.time, receipt_attempts: int = 20, receipt_interval: float = 3):
+                 resolver: PrivateResolver | None = None, clock: Callable[[], float] = time.time,
+                 receipt_attempts: int = 20, receipt_interval: float = 3):
         self.destination, self.clock = destination, clock
         self.ssl_context = ssl_context or self.trust()
+        self.resolver = resolver
         self.receipt_attempts, self.receipt_interval = receipt_attempts, receipt_interval
         self.http: aiohttp.ClientSession
 
     async def __aenter__(self) -> HelperHTTP:
+        if self.resolver is not None:
+            await self.resolver.vet()
         self.http = aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar(), trust_env=False,
             timeout=aiohttp.ClientTimeout(total=300, connect=15),
-            connector=aiohttp.TCPConnector(ssl=self.ssl_context),
+            connector=aiohttp.TCPConnector(ssl=self.ssl_context, resolver=self.resolver),
             headers={"X-TDM-Request": "1", "Accept": "application/json"})
         return self
 
@@ -98,6 +154,14 @@ class HelperHTTP:
                 context.load_verify_locations(cadata=b"".join(roots))
             except (OSError, ssl.SSLError, ValueError):
                 raise SessionError("HELPER_CA_FILE", stage="helper_configuration") from None
+        return context
+
+    @staticmethod
+    def unverified() -> ssl.SSLContext:
+        """Explicitly requested, private-address-only TDM connections; never used for Twitch."""
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        context.check_hostname = False
+        context.verify_mode = ssl.CERT_NONE
         return context
 
     @staticmethod
@@ -809,9 +873,17 @@ class NativeLoginHelper:
                  browser_factory: Callable[..., Any] = BrowserSelection.create,
                  exporter_factory: Callable[..., Any] | None = None,
                  clock: Callable[[], float] = time.time, report: Callable[[str], None] = lambda _key: None,
-                 ca_file: Path | None = None):
+                 ca_file: Path | None = None, insecure_skip_tls_verify: bool = False):
         self.destination = HelperDestination(destination)
-        self.ssl_context = HelperHTTP.trust(ca_file)
+        self.resolver = None
+        if not insecure_skip_tls_verify:
+            self.ssl_context = HelperHTTP.trust(ca_file)
+        elif ca_file is not None:
+            raise ValueError("--ca-file and --insecure-skip-tls-verify are exclusive")
+        elif not self.destination.url.startswith("https://"):
+            raise SessionError("HELPER_INSECURE_TLS", stage="helper_configuration")
+        else:
+            self.ssl_context, self.resolver = HelperHTTP.unverified(), PrivateResolver(self.destination)
         self.browser_factory, self.exporter_factory = browser_factory, exporter_factory
         self.clock, self.report = clock, report
 
@@ -819,7 +891,8 @@ class NativeLoginHelper:
         phase = "helper_connect"
         try:
             self.report("connecting")
-            async with HelperHTTP(self.destination, ssl_context=self.ssl_context, clock=self.clock) as client:
+            async with HelperHTTP(self.destination, ssl_context=self.ssl_context, resolver=self.resolver,
+                                  clock=self.clock) as client:
                 ticket = await client.connect()
                 phase = "browser_start"
                 async with self.browser_factory() as browser:
@@ -910,7 +983,9 @@ class LoginHelperCLI:
         paths.add_argument("--chrome", type=Path, help=words["chrome_help"])
         paths.add_argument("--chromium", type=Path, help=words["chromium_help"])
         paths.add_argument("--firefox", type=Path, help=words["firefox_help"])
-        parser.add_argument("--ca-file", type=Path, help=words["ca_file_help"])
+        tls = parser.add_mutually_exclusive_group()
+        tls.add_argument("--ca-file", type=Path, help=words["ca_file_help"])
+        tls.add_argument("--insecure-skip-tls-verify", action="store_true", help=words["insecure_help"])
         parser.add_argument("--language", choices=_.get_languages(), help=words["language_help"])
         parser.add_argument("--no-pause", action="store_true", help=words["no_pause_help"])
         args = parser.parse_args()
@@ -919,12 +994,14 @@ class LoginHelperCLI:
             parser.error(words["browser_conflict"])
         result = 0
         try:
+            if args.insecure_skip_tls_verify:
+                print(words["insecure_warning"], file=sys.stderr, flush=True)
             destination = HelperDestination(args.tdm or input(words["destination_prompt"]).strip()).url
             helper = NativeLoginHelper(destination,
                 browser_factory=lambda: BrowserSelection.create(
                 args.browser, chrome=args.chrome, chromium=args.chromium, firefox=args.firefox),
                 report=lambda key: print(words[key], flush=True),  # type: ignore[literal-required]
-                ca_file=args.ca_file)
+                ca_file=args.ca_file, insecure_skip_tls_verify=args.insecure_skip_tls_verify)
             print(words["destination"].format(url=helper.destination.url), flush=True)
             if args.ca_file is not None and helper.destination.url.startswith("https://"):
                 print(words["ca_file_in_use"], flush=True)

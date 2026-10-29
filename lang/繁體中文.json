@@ -438,6 +438,8 @@
         "tdm_help": "TDM 執行個體的根網址",
         "ca_file_help": "僅用於 TDM HTTPS 連線的受信任 PEM 憑證檔，例如自簽憑證或私人 CA 憑證。憑證驗證保持開啟。",
         "ca_file_in_use": "正在為 TDM 連線使用自訂憑證檔。",
+        "insecure_help": "不安全：僅對 TDM 連線略過 HTTPS 憑證驗證。只允許私人位址或回送位址；建議改用 --ca-file。",
+        "insecure_warning": "警告：TDM 的 TLS 憑證驗證已關閉。你網路中的任何裝置都可能冒充挖礦程式並取得你的 Twitch 登入資訊。請盡可能改用 --ca-file。",
         "chrome_help": "Google Chrome 路徑（通常自動偵測）",
         "language_help": "主控台語言",
         "no_pause_help": "結束時不等待 Enter",
@@ -448,6 +450,7 @@
         "errors": {
             "destination": "TDM 位址無效。請輸入 http:// 或 https:// 根位址及連接埠，不要包含路徑、密碼、查詢參數或片段。",
             "ca_file": "無法使用 --ca-file 中的憑證。請選擇包含 CA 憑證（CA:TRUE）的可讀取 PEM 檔，例如你的自簽憑證或私人 CA 憑證，而非私密金鑰。",
+            "insecure_tls": "--insecure-skip-tls-verify 需要一個 https:// TDM 位址，且其主機名稱只解析到私人位址或回送位址。其他位址請使用 --ca-file。",
             "disabled": "助手連線尚未啟用。請在 TDM 登入頁面選擇「使用桌面助手」，然後執行助手。",
             "expired": "助手連線已到期或被取消。請在 TDM 中重新啟用桌面助手存取權限，然後重新執行助手。",
             "busy": "已有其他助手連線。請先在 TDM 控制台中取消，再重新開始。",

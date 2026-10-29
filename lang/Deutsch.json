@@ -438,6 +438,8 @@
         "tdm_help": "Stamm-URL deiner TDM-Instanz",
         "ca_file_help": "PEM-Zertifikatsdatei, der nur für die HTTPS-Verbindung zu TDM vertraut wird, z. B. ein selbstsigniertes oder privates CA-Zertifikat. Die Zertifikatsprüfung bleibt aktiv.",
         "ca_file_in_use": "Eigene Zertifikatsdatei für die TDM-Verbindung wird verwendet.",
+        "insecure_help": "UNSICHER: HTTPS-Zertifikatsprüfung nur für die TDM-Verbindung überspringen. Nur für private oder Loopback-Adressen erlaubt; besser --ca-file verwenden.",
+        "insecure_warning": "WARNUNG: Die TLS-Zertifikatsprüfung für TDM ist AUS. Jedes Gerät in deinem Netzwerk könnte sich als Miner ausgeben und deinen Twitch-Login erhalten. Verwende wenn möglich stattdessen --ca-file.",
         "chrome_help": "Pfad zu Google Chrome (normalerweise automatisch erkannt)",
         "language_help": "Konsolensprache",
         "no_pause_help": "Ohne Warten auf die Eingabetaste beenden",
@@ -448,6 +450,7 @@
         "errors": {
             "destination": "Ungültige TDM-Adresse. Nutze die http://- oder https://-Basisadresse mit Port, ohne Pfad, Passwort, Abfrage oder Fragment.",
             "ca_file": "Das Zertifikat aus --ca-file konnte nicht verwendet werden. Wähle eine lesbare PEM-Datei mit einem CA-Zertifikat (CA:TRUE), etwa dein selbstsigniertes oder privates CA-Zertifikat, keinen privaten Schlüssel.",
+            "insecure_tls": "--insecure-skip-tls-verify braucht eine https://-Adresse für TDM, deren Host nur zu privaten oder Loopback-Adressen aufgelöst wird. Verwende für andere Adressen --ca-file.",
             "disabled": "Helferzugriff ist geschlossen. Wähle Desktop-Helfer verwenden auf der TDM-Anmeldeseite und starte danach den Helfer.",
             "expired": "Die Helferverbindung ist abgelaufen oder wurde abgebrochen. Aktiviere den Helferzugriff erneut in TDM und starte den Helfer neu.",
             "busy": "Ein anderer Helfer ist bereits verbunden. Beende ihn im TDM-Dashboard, bevor du erneut startest.",

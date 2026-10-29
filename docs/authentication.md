@@ -156,9 +156,34 @@ openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj /CN=tdm \
   -addext basicConstraints=critical,CA:TRUE -keyout tdm-proxy.key -out tdm-proxy.pem
 ```
 
-The helper has no option to turn certificate checks off. This connection carries
-your Twitch session, and without verification anyone on the network path could
-impersonate the dashboard and capture it.
+#### Skipping certificate checks (not recommended)
+
+Prefer `--ca-file`. If you cannot use it, `--insecure-skip-tls-verify` turns off
+certificate checks for the helper's connection to TDM:
+
+```bash
+./tdm-login-helper --tdm https://192.168.1.10:8443 --insecure-skip-tls-verify
+```
+
+This connection carries your Twitch session. Without certificate checks, any device on
+your network that can intercept the connection can pretend to be your miner and
+receive your Twitch login. The helper prints a warning every time you use the flag.
+
+To limit the risk, the flag:
+
+- works only with an `https://` dashboard address;
+- works only when every address the host name resolves to is private or loopback:
+  `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`,
+  `fc00::/7` or `fe80::/10`. Other addresses fail with `SESSION_HELPER_INSECURE_TLS`;
+- connects only to the addresses it checked, so a DNS change during login cannot
+  send the connection elsewhere, and redirects are refused;
+- cannot be combined with `--ca-file`, and does not affect the helper's browser or
+  its connections to Twitch.
+
+Carrier-grade NAT addresses (`100.64.0.0/10`, also used by Tailscale) are not
+accepted, because other customers of the same internet provider share that range.
+Tailscale already encrypts traffic between your devices; use `--ca-file` or a
+certificate issued for your Tailscale host name instead.
 
 ## Existing installations
 

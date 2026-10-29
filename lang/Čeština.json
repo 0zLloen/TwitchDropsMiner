@@ -438,6 +438,8 @@
         "tdm_help": "Kořenová URL vaší instance TDM",
         "ca_file_help": "Soubor certifikátu PEM, kterému se důvěřuje jen pro HTTPS připojení k TDM, například certifikát podepsaný sám sebou nebo certifikát soukromé CA. Ověřování certifikátů zůstává zapnuté.",
         "ca_file_in_use": "Používá se vlastní soubor certifikátu pro připojení k TDM.",
+        "insecure_help": "NEBEZPEČNÉ: přeskočí ověření certifikátu HTTPS jen pro připojení k TDM. Povoleno pouze pro soukromé adresy nebo adresy loopback; raději použijte --ca-file.",
+        "insecure_warning": "VAROVÁNÍ: ověřování certifikátů TLS pro TDM je VYPNUTO. Jakékoli zařízení ve vaší síti se může vydávat za miner a získat vaše přihlášení k Twitchi. Kdykoli je to možné, použijte místo toho --ca-file.",
         "chrome_help": "Cesta ke Google Chrome (obvykle se zjistí automaticky)",
         "language_help": "Jazyk konzole",
         "no_pause_help": "Ukončit bez čekání na Enter",
@@ -448,6 +450,7 @@
         "errors": {
             "destination": "Neplatná adresa TDM. Použijte kořenovou URL http:// nebo https:// s portem, bez cesty, hesla, dotazu či fragmentu.",
             "ca_file": "Certifikát z --ca-file nelze použít. Vyberte čitelný soubor PEM s certifikátem CA (CA:TRUE), například váš certifikát podepsaný sám sebou nebo certifikát soukromé CA, ne soukromý klíč.",
+            "insecure_tls": "--insecure-skip-tls-verify vyžaduje adresu TDM https://, jejíž hostitel se překládá jen na soukromé adresy nebo adresy loopback. Pro jiné adresy použijte --ca-file.",
             "disabled": "Přístup pomocníka je uzavřen. Na přihlašovací obrazovce TDM zvolte Použít pomocníka pro počítač a poté pomocníka spusťte.",
             "expired": "Spojení pomocníka vypršelo nebo bylo zrušeno. Znovu povolte přístup pomocníka v TDM a spusťte pomocníka znovu.",
             "busy": "Jiný pomocník je již připojen. Před novým pokusem jej zrušte v panelu TDM.",

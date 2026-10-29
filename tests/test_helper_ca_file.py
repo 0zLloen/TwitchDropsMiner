@@ -57,8 +57,10 @@ def private_ca_chain(directory: Path) -> tuple[Path, Path, Path]:
 
 
 @asynccontextmanager
-async def tls_instance(cert: Path, key: Path):
+async def tls_instance(cert: Path, key: Path, *, redirect: str | None = None):
     async def connect(_request):
+        if redirect is not None:
+            raise web.HTTPTemporaryRedirect(redirect)
         return web.json_response({"version": 1, "connection": "A" * 43, "expires_at": 1600})
 
     app = web.Application()

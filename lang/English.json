@@ -438,6 +438,8 @@
         "tdm_help": "Root URL of your TDM instance",
         "ca_file_help": "PEM certificate file to trust for the TDM HTTPS connection only, such as a self-signed or private CA certificate. Certificate checks stay on.",
         "ca_file_in_use": "Using the custom certificate file for the TDM connection.",
+        "insecure_help": "UNSAFE: skip HTTPS certificate checks for the TDM connection only. Allowed only for private or loopback addresses; prefer --ca-file.",
+        "insecure_warning": "WARNING: TLS certificate verification for TDM is OFF. Any device on your network could impersonate the miner and receive your Twitch login. Use --ca-file instead whenever possible.",
         "chrome_help": "Path to Google Chrome (normally detected automatically)",
         "language_help": "Console language",
         "no_pause_help": "Exit without waiting for Enter",
@@ -448,6 +450,7 @@
         "errors": {
             "destination": "Invalid TDM address. Use its http:// or https:// root URL, including the port, without a path, password, query or fragment.",
             "ca_file": "The --ca-file certificate could not be used. Choose a readable PEM file containing a CA certificate (CA:TRUE), such as your self-signed or private CA certificate, not a private key.",
+            "insecure_tls": "--insecure-skip-tls-verify needs an https:// TDM address whose host resolves only to private or loopback addresses. For other addresses, use --ca-file.",
             "disabled": "Helper access is closed. Select Use desktop helper on the TDM sign-in screen, then run the helper.",
             "expired": "This helper connection expired or was cancelled. Enable desktop helper access again in TDM and restart the helper.",
             "busy": "Another helper is already connected. Cancel it in the TDM dashboard before starting again.",

@@ -448,6 +448,7 @@ class GUIMessages(TypedDict):
 class HelperErrors(TypedDict):
     destination: str
     ca_file: str
+    insecure_tls: str
     disabled: str
     expired: str
     busy: str
@@ -501,6 +502,8 @@ class HelperMessages(TypedDict):
     tdm_help: str
     ca_file_help: str
     ca_file_in_use: str
+    insecure_help: str
+    insecure_warning: str
     chrome_help: str
     language_help: str
     no_pause_help: str

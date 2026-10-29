@@ -438,6 +438,8 @@
         "tdm_help": "URL raíz de tu instancia de TDM",
         "ca_file_help": "Archivo de certificado PEM de confianza solo para la conexión HTTPS con TDM, como un certificado autofirmado o de una CA privada. La verificación de certificados sigue activa.",
         "ca_file_in_use": "Usando el archivo de certificado personalizado para la conexión con TDM.",
+        "insecure_help": "INSEGURO: omite la verificación del certificado HTTPS solo para la conexión con TDM. Solo se permite con direcciones privadas o de loopback; es preferible --ca-file.",
+        "insecure_warning": "ADVERTENCIA: la verificación de certificados TLS para TDM está DESACTIVADA. Cualquier dispositivo de tu red podría hacerse pasar por el minero y recibir tu inicio de sesión de Twitch. Usa --ca-file siempre que sea posible.",
         "chrome_help": "Ruta de Google Chrome (normalmente se detecta automáticamente)",
         "language_help": "Idioma de la consola",
         "no_pause_help": "Salir sin esperar a Intro",
@@ -448,6 +450,7 @@
         "errors": {
             "destination": "Dirección TDM no válida. Usa la URL raíz http:// o https:// con puerto, sin ruta, contraseña, consulta ni fragmento.",
             "ca_file": "No se pudo usar el certificado de --ca-file. Elige un archivo PEM legible que contenga un certificado de CA (CA:TRUE), como tu certificado autofirmado o de CA privada, no una clave privada.",
+            "insecure_tls": "--insecure-skip-tls-verify necesita una dirección https:// de TDM cuyo host se resuelva solo a direcciones privadas o de loopback. Para otras direcciones, usa --ca-file.",
             "disabled": "El acceso del asistente está cerrado. Selecciona Usar asistente de escritorio en la pantalla de inicio de sesión de TDM y ejecuta el asistente.",
             "expired": "La conexión del asistente caducó o fue cancelada. Activa de nuevo el acceso del asistente en TDM y reinícialo.",
             "busy": "Ya hay otro asistente conectado. Cancélalo en el panel de TDM antes de empezar de nuevo.",
