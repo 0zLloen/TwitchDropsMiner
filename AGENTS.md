@@ -607,12 +607,15 @@ progress to an ignored drop while the miner intentionally targets another reward
 - The helper's optional `--ca-file PATH` adds CA certificates for its TDM connection
   only, through `HelperHTTP.trust()`: system trust via truststore plus the file's
   certificates. Verification and hostname checks stay on; never add an option that
-  disables them, because this connection carries the Twitch session. Only `CA:TRUE`
-  certificates are loaded (truststore passes only CA certificates to Windows/macOS
-  verification), so missing, unreadable, non-PEM, key-only or server-only files fail
-  before connecting with the fixed `HELPER_CA_FILE` code. Never print the path or file
-  contents; the CLI prints only the fixed `ca_file_in_use` note. Coverage:
-  `tests/test_helper_ca_file.py`; its live handshakes run on Linux only.
+  disables them, because this connection carries the Twitch session. Only certificates
+  passing OpenSSL's CA check (normally `CA:TRUE`) are loaded, because truststore passes
+  only those to Windows/macOS verification; missing, unreadable, non-PEM, key-only or
+  server-only files fail before connecting with the fixed `HELPER_CA_FILE` code. Never
+  print the path or file contents; the CLI prints only the fixed `ca_file_in_use` note,
+  for HTTPS destinations. `tests/test_helper_ca_file.py` runs real handshakes and is in
+  the native helper workflow's four-platform test list; keep its certificates within
+  Apple's TLS rules (serverAuth, short validity) and generated through config files
+  that macOS LibreSSL also accepts.
 
 ### Dashboard authentication
 

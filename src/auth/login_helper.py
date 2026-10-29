@@ -926,7 +926,7 @@ class LoginHelperCLI:
                 report=lambda key: print(words[key], flush=True),  # type: ignore[literal-required]
                 ca_file=args.ca_file)
             print(words["destination"].format(url=helper.destination.url), flush=True)
-            if args.ca_file is not None:
+            if args.ca_file is not None and helper.destination.url.startswith("https://"):
                 print(words["ca_file_in_use"], flush=True)
             asyncio.run(LoginHelperCLI.run_cancellable(helper))
         except SessionError as error:

@@ -125,7 +125,8 @@ private, and never copy cookies or authentication files into the dashboard.
 ### Self-signed HTTPS certificates
 
 If your dashboard is behind an HTTPS reverse proxy with a self-signed or private CA
-certificate, give that certificate to the helper instead of trusting it system-wide:
+certificate, give that certificate to the helper instead of trusting it system-wide.
+On Windows, run `tdm-login-helper.exe` with the same options:
 
 ```bash
 ./tdm-login-helper --tdm https://192.168.1.10:8443 --ca-file tdm-proxy.pem
@@ -135,12 +136,25 @@ The helper then trusts your operating system's certificates plus that file, for 
 connection to TDM only. It still checks the certificate chain, its validity dates,
 and that the certificate names the dashboard host (Subject Alternative Name). The
 file must be PEM and contain a CA certificate (`CA:TRUE`): the self-signed proxy
-certificate itself, or the private CA that signed it. Never pass a private key.
-`openssl req -x509` marks a self-signed certificate as a CA by default. A server-only
-certificate (`CA:FALSE`) fails with `SESSION_HELPER_CA_FILE`, because Windows and
-macOS ignore it. macOS also applies Apple's rules for TLS server certificates, such as
-the `serverAuth` extended key usage and a validity of at most 825 days. The helper
-prints only that a custom certificate file is in use, not its path or contents.
+certificate itself, or the root CA that signed it. Never pass a private key. Convert a
+DER `.cer` file with `openssl x509 -inform der -in proxy.cer -out tdm-proxy.pem`.
+A server-only certificate (`CA:FALSE`) fails with `SESSION_HELPER_CA_FILE`, because
+Windows and macOS ignore it. The helper prints only that a custom certificate file is
+in use, not its path or contents.
+
+macOS also applies Apple's rules for TLS server certificates: the `serverAuth`
+extended key usage, an RSA key of at least 2048 bits (or an EC key) and a validity of
+at most 825 days. A plain `openssl req -x509` certificate lacks `serverAuth`. This
+command creates a proxy certificate that works on all helper platforms; replace the
+IP address with your dashboard host (`DNS:nas.home.arpa` for a name), then configure
+the proxy with `tdm-proxy.pem` and `tdm-proxy.key`. It needs OpenSSL 1.1.1 or newer,
+for example on the proxy host:
+
+```bash
+openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj /CN=tdm \
+  -addext subjectAltName=IP:192.168.1.10 -addext extendedKeyUsage=serverAuth \
+  -addext basicConstraints=critical,CA:TRUE -keyout tdm-proxy.key -out tdm-proxy.pem
+```
 
 The helper has no option to turn certificate checks off. This connection carries
 your Twitch session, and without verification anyone on the network path could

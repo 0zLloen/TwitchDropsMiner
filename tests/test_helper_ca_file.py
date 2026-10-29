@@ -1,5 +1,6 @@
 """Optional --ca-file trust for the helper's TDM connection, with verification kept on."""
 
+import os
 import shutil
 import ssl
 import subprocess
@@ -16,38 +17,42 @@ from src.auth.session_bundle import SessionError
 
 
 ROOT = Path(__file__).resolve().parents[1]
-needs_openssl = pytest.mark.skipif(shutil.which("openssl") is None, reason="openssl CLI generates test certificates")
-# Windows and macOS verify through native APIs that CI exercises only in release builds.
-needs_linux = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="OpenSSL verification path")
+# CI must not silently lose platform coverage, so only local runs may skip.
+needs_openssl = pytest.mark.skipif(shutil.which("openssl") is None and not os.environ.get("CI"),
+                                   reason="openssl CLI generates test certificates")
 
 
 def openssl(*args: str) -> None:
     subprocess.run(["openssl", *args], check=True, capture_output=True)
 
 
-def key_and_request(directory: Path, name: str) -> tuple[Path, list[str]]:
-    key = directory / f"{name}.key"
-    return key, ["-newkey", "ec", "-pkeyopt", "ec_paramgen_curve:P-256", "-nodes", "-keyout", str(key)]
+def extensions(directory: Path, name: str, lines: str) -> list[str]:
+    """Config-file extensions work with both OpenSSL and macOS LibreSSL."""
+    config = directory / f"{name}.cnf"
+    config.write_text("[req]\ndistinguished_name=dn\nprompt=no\n[dn]\nCN=TDM test\n[ext]\n" + lines)
+    return ["-config", str(config), "-extensions", "ext"]
 
 
 def self_signed(directory: Path, name: str, *, san: str = "IP:127.0.0.1", ca: bool = True) -> tuple[Path, Path]:
-    key, options = key_and_request(directory, name)
-    cert = directory / f"{name}.pem"
-    openssl("req", "-x509", *options, "-out", str(cert), "-days", "2", "-subj", "/CN=TDM test",
-            "-addext", f"subjectAltName={san}",
-            "-addext", f"basicConstraints=critical,CA:{'TRUE' if ca else 'FALSE'}")
+    # serverAuth and a short validity satisfy Apple's TLS server certificate rules.
+    cert, key = directory / f"{name}.pem", directory / f"{name}.key"
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key), "-out", str(cert), "-days", "2",
+            *extensions(directory, name, f"subjectAltName={san}\nextendedKeyUsage=serverAuth\n"
+                        f"basicConstraints=critical,CA:{'TRUE' if ca else 'FALSE'}\n"))
     return cert, key
 
 
 def private_ca_chain(directory: Path) -> tuple[Path, Path, Path]:
-    """Return a private CA certificate plus a server certificate it signed."""
-    ca, ca_key = self_signed(directory, "ca", san="DNS:ca.invalid")
-    key, options = key_and_request(directory, "server")
-    request, cert, extensions = directory / "server.csr", directory / "server.pem", directory / "server.ext"
-    extensions.write_text("subjectAltName=IP:127.0.0.1\nbasicConstraints=critical,CA:FALSE\n")
-    openssl("req", "-new", *options, "-out", str(request), "-subj", "/CN=127.0.0.1")
-    openssl("x509", "-req", "-in", str(request), "-CA", str(ca), "-CAkey", str(ca_key),
-            "-CAcreateserial", "-days", "2", "-extfile", str(extensions), "-out", str(cert))
+    """Return a private root CA certificate plus a server certificate it signed."""
+    ca, ca_key = directory / "ca.pem", directory / "ca.key"
+    openssl("req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(ca_key), "-out", str(ca), "-days", "2",
+            *extensions(directory, "ca", "basicConstraints=critical,CA:TRUE\nkeyUsage=keyCertSign\n"))
+    key, request, cert = directory / "server.key", directory / "server.csr", directory / "server.pem"
+    server = extensions(directory, "server", "subjectAltName=IP:127.0.0.1\nextendedKeyUsage=serverAuth\n"
+                        "basicConstraints=critical,CA:FALSE\n")
+    openssl("req", "-new", "-newkey", "rsa:2048", "-nodes", "-keyout", str(key), "-out", str(request), server[0], server[1])
+    openssl("x509", "-req", "-in", str(request), "-CA", str(ca), "-CAkey", str(ca_key), "-CAcreateserial",
+            "-days", "2", "-extfile", server[1], "-extensions", "ext", "-out", str(cert))
     return ca, cert, key
 
 
@@ -84,7 +89,6 @@ def test_default_context_keeps_system_verification():
 
 
 @needs_openssl
-@needs_linux
 @pytest.mark.asyncio
 async def test_self_signed_certificate_requires_ca_file(tmp_path):
     cert, key = self_signed(tmp_path, "tdm")
@@ -97,7 +101,6 @@ async def test_self_signed_certificate_requires_ca_file(tmp_path):
 
 
 @needs_openssl
-@needs_linux
 @pytest.mark.asyncio
 async def test_private_ca_trusts_server_certificate_it_signed(tmp_path):
     ca, cert, key = private_ca_chain(tmp_path)
@@ -106,7 +109,6 @@ async def test_private_ca_trusts_server_certificate_it_signed(tmp_path):
 
 
 @needs_openssl
-@needs_linux
 @pytest.mark.asyncio
 async def test_ca_file_keeps_hostname_verification(tmp_path):
     cert, key = self_signed(tmp_path, "other", san="DNS:other.example.test")
@@ -172,8 +174,10 @@ def test_cli_documents_ca_file_and_reports_fixed_error(tmp_path):
 def test_cli_notes_custom_ca_without_its_path(tmp_path):
     cert, _key = self_signed(tmp_path, "private-marker")
     # Port 1 refuses the connection, so the run ends after configuration.
-    result = run_cli("--tdm", "http://127.0.0.1:1", "--ca-file", str(cert))
+    result = run_cli("--tdm", "https://127.0.0.1:1", "--ca-file", str(cert))
     output = result.stdout + result.stderr
     assert "custom certificate file" in output
     assert "private-marker" not in output
     assert "SESSION_HELPER_NETWORK" in output
+    plain = run_cli("--tdm", "http://127.0.0.1:1", "--ca-file", str(cert))
+    assert "custom certificate file" not in plain.stdout + plain.stderr
