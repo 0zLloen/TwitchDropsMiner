@@ -59,7 +59,8 @@ class HelperDestination:
 class PrivateResolver(AbstractResolver):
     """Resolve the TDM host once, require private addresses, then connect only to those."""
 
-    # 100.64.0.0/10 (carrier-grade NAT) is excluded: other ISP customers share it.
+    # The user-approved list. 100.64.0.0/10 (carrier-grade NAT) is excluded because other
+    # ISP customers share it; IPv4 link-local 169.254.0.0/16 was not requested.
     NETWORKS = tuple(ipaddress.ip_network(network) for network in (
         "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8",
         "::1/128", "fc00::/7", "fe80::/10",
@@ -135,6 +136,9 @@ class HelperHTTP:
 
     async def __aexit__(self, *_args: Any) -> None:
         await self.http.close()
+        if self.resolver is not None:
+            # aiohttp closes only resolvers it created itself.
+            await self.resolver.close()
 
     @staticmethod
     def trust(ca_file: Path | None = None) -> ssl.SSLContext:

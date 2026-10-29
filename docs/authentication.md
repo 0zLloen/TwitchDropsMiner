@@ -180,10 +180,11 @@ To limit the risk, the flag:
 - cannot be combined with `--ca-file`, and does not affect the helper's browser or
   its connections to Twitch.
 
-Carrier-grade NAT addresses (`100.64.0.0/10`, also used by Tailscale) are not
-accepted, because other customers of the same internet provider share that range.
-Tailscale already encrypts traffic between your devices; use `--ca-file` or a
-certificate issued for your Tailscale host name instead.
+Carrier-grade NAT addresses (`100.64.0.0/10`) are not accepted, because other
+customers of the same internet provider share that range. This also refuses Tailscale
+`100.x` addresses and MagicDNS names, which resolve to both a `100.x` and an IPv6
+address. Tailscale already encrypts traffic between your devices; use `--ca-file` or
+a certificate from `tailscale cert` instead.
 
 ## Existing installations
 
