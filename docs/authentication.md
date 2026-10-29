@@ -122,6 +122,30 @@ a valid certificate. Your everyday browser profiles are untouched; temporary hel
 profiles are removed when the helper finishes. Keep any profile left after a crash
 private, and never copy cookies or authentication files into the dashboard.
 
+### Self-signed HTTPS certificates
+
+If your dashboard is behind an HTTPS reverse proxy with a self-signed or private CA
+certificate, give that certificate to the helper instead of trusting it system-wide:
+
+```bash
+./tdm-login-helper --tdm https://192.168.1.10:8443 --ca-file tdm-proxy.pem
+```
+
+The helper then trusts your operating system's certificates plus that file, for its
+connection to TDM only. It still checks the certificate chain, its validity dates,
+and that the certificate names the dashboard host (Subject Alternative Name). The
+file must be PEM and contain a CA certificate (`CA:TRUE`): the self-signed proxy
+certificate itself, or the private CA that signed it. Never pass a private key.
+`openssl req -x509` marks a self-signed certificate as a CA by default. A server-only
+certificate (`CA:FALSE`) fails with `SESSION_HELPER_CA_FILE`, because Windows and
+macOS ignore it. macOS also applies Apple's rules for TLS server certificates, such as
+the `serverAuth` extended key usage and a validity of at most 825 days. The helper
+prints only that a custom certificate file is in use, not its path or contents.
+
+The helper has no option to turn certificate checks off. This connection carries
+your Twitch session, and without verification anyone on the network path could
+impersonate the dashboard and capture it.
+
 ## Existing installations
 
 Keep the same private `data` directory across updates. Valid saved Android logins and

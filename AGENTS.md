@@ -604,6 +604,15 @@ progress to an ignored drop while the miner intentionally targets another reward
   as the default. On macOS, users must quit the helper-owned browser instance to flush
   its profile. Keep the release-ready README, installation examples, login guide, and
   generated release-note instructions consistent with these behaviors.
+- The helper's optional `--ca-file PATH` adds CA certificates for its TDM connection
+  only, through `HelperHTTP.trust()`: system trust via truststore plus the file's
+  certificates. Verification and hostname checks stay on; never add an option that
+  disables them, because this connection carries the Twitch session. Only `CA:TRUE`
+  certificates are loaded (truststore passes only CA certificates to Windows/macOS
+  verification), so missing, unreadable, non-PEM, key-only or server-only files fail
+  before connecting with the fixed `HELPER_CA_FILE` code. Never print the path or file
+  contents; the CLI prints only the fixed `ca_file_in_use` note. Coverage:
+  `tests/test_helper_ca_file.py`; its live handshakes run on Linux only.
 
 ### Dashboard authentication
 

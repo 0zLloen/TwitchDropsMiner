@@ -63,21 +63,42 @@ class HelperTicket:
 class HelperHTTP:
     """Bounded direct protocol, without redirects, proxies or dashboard cookies."""
 
-    def __init__(self, destination: HelperDestination, *, clock: Callable[[], float] = time.time,
-                 receipt_attempts: int = 20, receipt_interval: float = 3):
+    def __init__(self, destination: HelperDestination, *, ssl_context: ssl.SSLContext | None = None,
+                 clock: Callable[[], float] = time.time, receipt_attempts: int = 20, receipt_interval: float = 3):
         self.destination, self.clock = destination, clock
+        self.ssl_context = ssl_context or self.trust()
         self.receipt_attempts, self.receipt_interval = receipt_attempts, receipt_interval
         self.http: aiohttp.ClientSession
 
     async def __aenter__(self) -> HelperHTTP:
         self.http = aiohttp.ClientSession(cookie_jar=aiohttp.DummyCookieJar(), trust_env=False,
             timeout=aiohttp.ClientTimeout(total=300, connect=15),
-            connector=aiohttp.TCPConnector(ssl=truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)),
+            connector=aiohttp.TCPConnector(ssl=self.ssl_context),
             headers={"X-TDM-Request": "1", "Accept": "application/json"})
         return self
 
     async def __aexit__(self, *_args: Any) -> None:
         await self.http.close()
+
+    @staticmethod
+    def trust(ca_file: Path | None = None) -> ssl.SSLContext:
+        """System roots plus optional CA certificates for this helper only; verification stays on."""
+        context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        if ca_file is not None:
+            try:
+                if not ca_file.is_file():
+                    raise OSError
+                probe = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+                probe.load_verify_locations(cafile=ca_file)
+                # Windows and macOS verification only receives CA certificates, so
+                # reject server-only certificates everywhere instead of ignoring them.
+                roots = probe.get_ca_certs(binary_form=True)
+                if not roots:
+                    raise ssl.SSLError
+                context.load_verify_locations(cadata=b"".join(roots))
+            except (OSError, ssl.SSLError, ValueError):
+                raise SessionError("HELPER_CA_FILE", stage="helper_configuration") from None
+        return context
 
     @staticmethod
     def _server_error(path: str, status: int, data: Any) -> SessionError:
@@ -787,8 +808,10 @@ class NativeLoginHelper:
     def __init__(self, destination: str, *,
                  browser_factory: Callable[..., Any] = BrowserSelection.create,
                  exporter_factory: Callable[..., Any] | None = None,
-                 clock: Callable[[], float] = time.time, report: Callable[[str], None] = lambda _key: None):
+                 clock: Callable[[], float] = time.time, report: Callable[[str], None] = lambda _key: None,
+                 ca_file: Path | None = None):
         self.destination = HelperDestination(destination)
+        self.ssl_context = HelperHTTP.trust(ca_file)
         self.browser_factory, self.exporter_factory = browser_factory, exporter_factory
         self.clock, self.report = clock, report
 
@@ -796,7 +819,7 @@ class NativeLoginHelper:
         phase = "helper_connect"
         try:
             self.report("connecting")
-            async with HelperHTTP(self.destination, clock=self.clock) as client:
+            async with HelperHTTP(self.destination, ssl_context=self.ssl_context, clock=self.clock) as client:
                 ticket = await client.connect()
                 phase = "browser_start"
                 async with self.browser_factory() as browser:
@@ -887,6 +910,7 @@ class LoginHelperCLI:
         paths.add_argument("--chrome", type=Path, help=words["chrome_help"])
         paths.add_argument("--chromium", type=Path, help=words["chromium_help"])
         paths.add_argument("--firefox", type=Path, help=words["firefox_help"])
+        parser.add_argument("--ca-file", type=Path, help=words["ca_file_help"])
         parser.add_argument("--language", choices=_.get_languages(), help=words["language_help"])
         parser.add_argument("--no-pause", action="store_true", help=words["no_pause_help"])
         args = parser.parse_args()
@@ -899,8 +923,11 @@ class LoginHelperCLI:
             helper = NativeLoginHelper(destination,
                 browser_factory=lambda: BrowserSelection.create(
                 args.browser, chrome=args.chrome, chromium=args.chromium, firefox=args.firefox),
-                report=lambda key: print(words[key], flush=True))  # type: ignore[literal-required]
+                report=lambda key: print(words[key], flush=True),  # type: ignore[literal-required]
+                ca_file=args.ca_file)
             print(words["destination"].format(url=helper.destination.url), flush=True)
+            if args.ca_file is not None:
+                print(words["ca_file_in_use"], flush=True)
             asyncio.run(LoginHelperCLI.run_cancellable(helper))
         except SessionError as error:
             # Codes originate in our validators; never print response bodies or exceptions.
